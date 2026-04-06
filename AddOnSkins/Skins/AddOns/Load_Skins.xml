@@ -150,6 +150,7 @@
 	<Script file="WoWPro.lua"/>
 	<Script file="xMerchant.lua"/>
 	<Script file="XPBarNone.lua"/>
+	<Script file="XToLevel.lua"/>
 	<Script file="Zygor.lua"/>
 	<Script file="WIM.lua"/>
 </Ui>
