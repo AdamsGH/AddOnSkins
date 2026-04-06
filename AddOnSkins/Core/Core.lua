@@ -6,18 +6,25 @@ local AddOnName = ...
 local ES = AS.EmbedSystem
 
 local _G = _G
-local pairs, ipairs, type, pcall, tinsert = pairs, ipairs, type, pcall, tinsert
-local floor, print, format, strlower, strmatch, strlen = floor, print, format, strlower, strmatch, strlen
+local select, pairs, ipairs, type, pcall, tinsert = select, pairs, ipairs, type, pcall, tinsert
+local floor, print, format, strlower, strfind, strmatch, strlen = floor, print, format, strlower, strfind, strmatch, strlen
+local sort = sort
 
 local geterrorhandler = geterrorhandler
-local IsAddOnLoaded, C_Timer = C_AddOns.IsAddOnLoaded, C_Timer
+local C_AddOns = C_AddOns
+local IsAddOnLoaded = (C_AddOns and C_AddOns.IsAddOnLoaded) or _G.IsAddOnLoaded
+if not IsAddOnLoaded then
+	IsAddOnLoaded = function() return false end
+end
+local C_Timer = C_Timer
 
 AS.SkinErrors = {}
 
 local Validator = CreateFrame('Frame')
 
 function AS:CheckOption(optionName, ...)
-	for _, addon in next, {...} do
+	for i = 1, select('#', ...) do
+		local addon = select(i, ...)
 		if not addon then break end
 		if not AS:CheckAddOn(addon) then return false end
 	end
@@ -63,7 +70,18 @@ function AS:Delay(delay, func)
 end
 
 function AS:CheckAddOn(addon)
-	return AS.AddOns[strlower(addon)] or false
+	local key = strlower(addon or '')
+	-- Prefer runtime loaded state: enable-state APIs can be unreliable on Anniversary
+	-- (per-character enablement stored differently than on Retail).
+	local loaded = (C_AddOns and C_AddOns.IsAddOnLoaded and C_AddOns.IsAddOnLoaded(addon))
+		or (_G.IsAddOnLoaded and _G.IsAddOnLoaded(addon))
+	if loaded then return true end
+	-- ElvUI may not appear enabled in the addon list on Anniversary but its global is present.
+	if key == 'elvui' then return _G.ElvUI ~= nil end
+	if AS.AddOns[key] ~= nil then return AS.AddOns[key] end
+	local state = (C_AddOns and C_AddOns.GetAddOnEnableState and C_AddOns.GetAddOnEnableState(AS.MyName, addon))
+		or (_G.GetAddOnEnableState and _G.GetAddOnEnableState(AS.MyName, addon))
+	return (state or 0) > 0
 end
 
 function AS:GetAddOnVersion(addon)
@@ -81,6 +99,24 @@ end
 function AS:Round(num, idp)
 	local mult = 10^(idp or 0)
 	return floor(num * mult + 0.5) / mult
+end
+
+function AS:Scale(Number)
+	return AS.Mult * floor(Number / AS.Mult + .5)
+end
+
+function AS:OrderedPairs(t, f)
+	local a = {}
+	for n in pairs(t) do tinsert(a, n) end
+	sort(a, f)
+	local i = 0
+	local iter = function()
+		i = i + 1
+		if a[i] == nil then return nil
+		else return a[i], t[a[i]]
+		end
+	end
+	return iter
 end
 
 function AS:RegisterForPetBattleHide(frame)
@@ -159,7 +195,7 @@ local function errorhandler(err)
 end
 
 function AS:CallSkin(addonName, func, event, ...)
-	if AS.Debug then
+	if AS.Debug or AS:CheckOption('SkinDebug') then
 		local args = {...}
 		xpcall(function() func(self, event, unpack(args)) end, errorhandler)
 	else
@@ -196,7 +232,7 @@ function AS:UnregisterSkinEvent(addonName, event)
 end
 
 function AS:UpdateMedia()
-	AS.Blank = AS.Libs.LSM:Fetch('statusbar', 'Solid')
+	AS.Blank = AS.Libs.LSM:Fetch('background', 'Solid') or AS.Libs.LSM:Fetch('statusbar', 'Solid')
 	AS.Font = AS.Libs.LSM:Fetch('font', "Friz Quadrata TT")
 	AS.PixelFont = AS.Libs.LSM:Fetch('font', "Arial Narrow")
 	AS.NormTex = AS.Libs.LSM:Fetch('statusbar', "Blizzard")
@@ -233,7 +269,7 @@ function AS:StartUp(event, ...)
 
 	-- Check Blizzard for already loaded
 	for addonName, funcs in next, AS.skins do
-		if strmatch(addonName, '^Blizzard_') and AS:CheckOption(addonName) then
+		if strfind(addonName, '^Blizzard_') and AS:CheckOption(addonName) then
 			for _, func in ipairs(funcs) do
 				if IsAddOnLoaded(addonName) then
 					AS:CallSkin(addonName, func, 'ADDON_LOADED', addonName)
@@ -259,24 +295,30 @@ function AS:StartUp(event, ...)
 end
 
 function AS:Init(event, addon)
-	if event == 'ADDON_LOADED' and (AS.Initialized or IsAddOnLoaded(AddOnName)) then
-		if addon == AddOnName then
-			AS.Initialized = true
-			AS:BuildProfile()
-			AS:UpdateMedia()
+	-- IsAddOnLoaded can be nil on Anniversary; use the addon argument as the reliable signal.
+	if event == 'ADDON_LOADED' and addon == AddOnName then
+		AS.Initialized = true
+		AS:BuildProfile()
+		AS:UpdateMedia()
 
-			for addonName, funcs in next, AS.preload do
-				if AS.AlreadyLoaded[addonName] then
-					AS:RunPreload(addonName)
-				end
+		for addonName in next, AS.preload do
+			if AS.AlreadyLoaded[addonName] then
+				AS:RunPreload(addonName)
 			end
 		end
+	end
 
+	if event == 'ADDON_LOADED' and AS.Initialized then
 		AS:RunPreload(addon)
 	end
 
 	if event == 'PLAYER_LOGIN' then
 		AS:BuildOptions()
+
+		-- Resolve EP lazily: ElvUI_Libraries may load after AddOnSkins Init.lua runs.
+		if not AS.Libs.EP then
+			AS.Libs.EP = LibStub('LibElvUIPlugin-1.0', true)
+		end
 
 		for addOnEvent in pairs(AS.events) do
 			AS:RegisterEvent(addOnEvent, 'SkinEvent')

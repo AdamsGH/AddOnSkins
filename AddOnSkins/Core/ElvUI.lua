@@ -12,6 +12,8 @@ local ES = AS.EmbedSystem
 local E, L = unpack(ElvUI)
 
 function AS:UpdateMedia()
+	if not E then E = unpack(ElvUI) end
+
 	S.Media.Blank = AS.Libs.LSM:Fetch('background', 'ElvUI Blank')
 	S.Media.StatusBar = AS.Libs.LSM:Fetch('statusbar', E.private.general.normTex)
 
@@ -19,6 +21,11 @@ function AS:UpdateMedia()
 	S.Media.transparentBackdrop = E.media.backdropfadecolor
 	S.Media.borderColor = E.media.bordercolor
 	S.Media.valueColor = E.media.rgbvaluecolor
+
+	-- Also update the AS-level fields used by skins that reference AS.BackdropColor etc.
+	AS.BackdropColor = E.media.backdropcolor
+	AS.BorderColor = E.media.bordercolor
+	AS.Color = E.media.rgbvaluecolor or AS.ClassColor
 
 	S.Media.TexCoords = { 0, 1, 0, 1 }
 	local modifier = 0.04 * E.db.general.cropIcon
