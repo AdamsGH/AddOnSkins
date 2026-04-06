@@ -1488,14 +1488,18 @@ do
 	function S:HandleCloseButton(button, point, x, y)
 		S:StripTextures(button)
 
-		if not button.Texture then
-			button.Texture = button:CreateTexture(nil, 'OVERLAY')
+		-- button.Texture may already exist as a parentKey from UIPanelCloseButton
+		-- but be empty after StripTextures - check for actual texture content too
+		if not button.Texture or not button.Texture:GetTexture() then
+			if not button.Texture then
+				button.Texture = button:CreateTexture(nil, 'OVERLAY')
+				button:HookScript('OnEnter', closeOnEnter)
+				button:HookScript('OnLeave', closeOnLeave)
+				button:SetHitRectInsets(6, 6, 7, 7)
+			end
 			S:Point(button.Texture, 'CENTER')
 			button.Texture:SetTexture(Media.Close)
 			S:Size(button.Texture, 12, 12)
-			button:HookScript('OnEnter', closeOnEnter)
-			button:HookScript('OnLeave', closeOnLeave)
-			button:SetHitRectInsets(6, 6, 7, 7)
 		end
 
 		if point then
