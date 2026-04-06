@@ -290,10 +290,15 @@ local function SetupTMWOptions()
 	end
 end
 
+local function SetTMWIconBorderShown(icon, shown)
+	if icon._tmwConfigBorder then
+		icon._tmwConfigBorder:SetShown(shown)
+	end
+end
+
 local function SkinTMWIcon(icon)
-	if not icon or icon._tmwIconSkinned then return end
+	if not icon then return end
 	if not TMW or TMW.Locked then return end
-	icon._tmwIconSkinned = true
 	-- In config mode icons use Disabled.blp texture - add ElvUI border around them
 	if not icon._tmwConfigBorder then
 		local border = CreateFrame('Frame', nil, icon, 'BackdropTemplate')
@@ -303,32 +308,27 @@ local function SkinTMWIcon(icon)
 		AS:SetTemplate(border)
 		icon._tmwConfigBorder = border
 	end
+	icon._tmwConfigBorder:Show()
 end
 
 local function HookTMWIconSetup()
 	local TMW = _G['TMW']
 	if not TMW or not TMW.RegisterCallback then return end
 	TMW:RegisterCallback('TMW_ICON_SETUP_POST', function(_, icon)
-		if not TMW.Locked then
+		-- Show border only in config mode; hide it when locked (normal play)
+		if TMW.Locked then
+			SetTMWIconBorderShown(icon, false)
+		else
 			C_Timer.After(0, function() SkinTMWIcon(icon) end)
 		end
 	end)
-	-- Unlock: reset flags so icons get re-skinned when config mode opens again
 	TMW:RegisterCallback('TMW_LOCK_TOGGLED', function(_, locked)
-		if locked then return end
-		-- Reset per-icon flag so icons get re-skinned when config mode opens again
+		-- Hide all config borders when entering normal mode
 		for _, group in ipairs({TMW:GetChildren()}) do
 			for _, icon in ipairs({group:GetChildren()}) do
-				icon._tmwIconSkinned = nil
+				SetTMWIconBorderShown(icon, not locked)
 			end
 		end
-		C_Timer.After(0.5, function()
-			for _, group in ipairs({TMW:GetChildren()}) do
-				for _, icon in ipairs({group:GetChildren()}) do
-					SkinTMWIcon(icon)
-				end
-			end
-		end)
 	end)
 end
 
