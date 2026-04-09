@@ -1488,9 +1488,10 @@ do
 	function S:HandleCloseButton(button, point, x, y)
 		S:StripTextures(button)
 
-		-- button.Texture may already exist as a parentKey from UIPanelCloseButton
-		-- but be empty after StripTextures - check for actual texture content too
-		if not button.Texture or not button.Texture:GetTexture() then
+		-- button.Texture may exist as a parentKey from UIPanelCloseButton but still
+		-- hold a numeric fileID after StripTextures. Only skip if it's a string path
+		-- (i.e. was already set by a previous HandleCloseButton call).
+		if not button.Texture or type(button.Texture:GetTexture()) ~= 'string' then
 			if not button.Texture then
 				button.Texture = button:CreateTexture(nil, 'OVERLAY')
 				button:HookScript('OnEnter', closeOnEnter)
