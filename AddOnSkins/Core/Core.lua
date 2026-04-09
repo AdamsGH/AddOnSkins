@@ -79,8 +79,12 @@ function AS:CheckAddOn(addon)
 	-- ElvUI may not appear enabled in the addon list on Anniversary but its global is present.
 	if key == 'elvui' then return _G.ElvUI ~= nil end
 	if AS.AddOns[key] ~= nil then return AS.AddOns[key] end
-	local state = (C_AddOns and C_AddOns.GetAddOnEnableState and C_AddOns.GetAddOnEnableState(AS.MyName, addon))
-		or (_G.GetAddOnEnableState and _G.GetAddOnEnableState(AS.MyName, addon))
+	local state
+	if C_AddOns and C_AddOns.GetAddOnEnableState then
+		state = C_AddOns.GetAddOnEnableState(addon, AS.MyName)
+	else
+		state = _G.GetAddOnEnableState and _G.GetAddOnEnableState(AS.MyName, addon)
+	end
 	return (state or 0) > 0
 end
 
@@ -197,7 +201,10 @@ end
 function AS:CallSkin(addonName, func, event, ...)
 	if AS.Debug or AS:CheckOption('SkinDebug') then
 		local args = {...}
-		xpcall(function() func(self, event, unpack(args)) end, errorhandler)
+		local ok, err = xpcall(function() func(self, event, unpack(args)) end, function(e) return e..'\n'..debugstack() end)
+		if not ok then
+			AS:Print('SkinDebug ['..addonName..']: '..tostring(err))
+		end
 	else
 		local pass = pcall(func, self, event, ...)
 		if not pass then
@@ -254,7 +261,7 @@ function AS:StartUp(event, ...)
 		AS:SecureHook(_G.ElvUI[1], 'UpdateMedia')
 	end
 
-	if not AS.Debug then
+	if not AS.Debug and not AS:CheckOption('SkinDebug') then
 		for Version, SkinTable in pairs(_G.AddOnSkinsDS) do
 			if Version == AS.Version or Version < AS.Version then
 				if Version < AS.Version then

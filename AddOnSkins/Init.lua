@@ -9,9 +9,14 @@ if not _G.IsAddOnLoaded       and C_AddOns and C_AddOns.IsAddOnLoaded       then
 if not _G.GetAddOnMetadata    and C_AddOns and C_AddOns.GetAddOnMetadata    then _G.GetAddOnMetadata    = C_AddOns.GetAddOnMetadata    end
 if not _G.GetAddOnInfo        and C_AddOns and C_AddOns.GetAddOnInfo        then _G.GetAddOnInfo        = C_AddOns.GetAddOnInfo        end
 if not _G.GetNumAddOns        and C_AddOns and C_AddOns.GetNumAddOns        then _G.GetNumAddOns        = C_AddOns.GetNumAddOns        end
-if not _G.GetAddOnEnableState and C_AddOns and C_AddOns.GetAddOnEnableState then _G.GetAddOnEnableState = C_AddOns.GetAddOnEnableState end
+-- Do NOT alias C_AddOns.GetAddOnEnableState into the legacy global: they have
+-- opposite argument orders. Callers that need the legacy (character, name)
+-- signature must use _G.GetAddOnEnableState directly; callers that use the
+-- C_AddOns namespace call it as (name, character).
+if not _G.GetAddOnEnableState and C_AddOns and C_AddOns.GetAddOnEnableState then
+	_G.GetAddOnEnableState = function(character, name) return C_AddOns.GetAddOnEnableState(name, character) end
+end
 
-local GetAddOnEnableState = (C_AddOns and C_AddOns.GetAddOnEnableState) or _G.GetAddOnEnableState
 local GetAddOnInfo        = (C_AddOns and C_AddOns.GetAddOnInfo)        or _G.GetAddOnInfo
 local GetAddOnMetadata    = (C_AddOns and C_AddOns.GetAddOnMetadata)    or _G.GetAddOnMetadata
 local GetNumAddOns        = (C_AddOns and C_AddOns.GetNumAddOns)        or _G.GetNumAddOns
@@ -79,9 +84,13 @@ AS.AlreadyLoaded = {}
 for i = 1, GetNumAddOns() do
 	local Name, _, _, _, Reason = GetAddOnInfo(i)
 	local LoweredName = strlower(Name)
-	-- Classic API argument order is (characterName, addonName), opposite of Retail.
-	-- Treat any positive state as enabled to handle per-character quirks on Anniversary.
-	AS.AddOns[LoweredName] = (GetAddOnEnableState(AS.MyName, Name) or 0) > 0 and (not Reason or Reason ~= 'DEMAND_LOADED')
+	local enableState
+	if C_AddOns and C_AddOns.GetAddOnEnableState then
+		enableState = C_AddOns.GetAddOnEnableState(Name, AS.MyName)
+	else
+		enableState = _G.GetAddOnEnableState and _G.GetAddOnEnableState(AS.MyName, Name)
+	end
+	AS.AddOns[LoweredName] = (enableState or 0) > 0 and (not Reason or Reason ~= 'DEMAND_LOADED')
 	AS.AlreadyLoaded[Name] = IsAddOnLoaded and IsAddOnLoaded(Name) or false
 	AS.AddOnVersion[LoweredName] = GetAddOnMetadata(Name, 'Version')
 end
