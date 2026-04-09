@@ -134,11 +134,11 @@ function ES:Check(Message)
 		Window:SetFrameLevel(AS:CheckOption('EmbedFrameLevel'))
 	end
 
-	if AS:CheckEmbed('Details') then ES:Details() end
-	if AS:CheckEmbed('Omen') then ES:Omen() end
-	if AS:CheckEmbed('Skada') then ES:Skada() end
-	if AS:CheckEmbed('TinyDPS') then ES:TinyDPS() end
-	if AS:CheckEmbed('Recount') then ES:Recount() end
+	if AS:CheckEmbed('Details') and ES.Details   then ES:Details()  end
+	if AS:CheckEmbed('Omen')    and ES.Omen      then ES:Omen()     end
+	if AS:CheckEmbed('Skada')   and ES.Skada     then ES:Skada()    end
+	if AS:CheckEmbed('TinyDPS') and ES.TinyDPS   then ES:TinyDPS()  end
+	if AS:CheckEmbed('Recount') and ES.Recount   then ES:Recount()  end
 
 	if Message and AS:CheckOption('EmbedSystemMessage') then
 		if AS:CheckOption('EmbedMain') then AS:Print(format(L["Embed System: Main: '%s'"], AS:CheckOption('EmbedMain'))) end
