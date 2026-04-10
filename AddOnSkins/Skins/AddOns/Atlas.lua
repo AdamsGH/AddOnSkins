@@ -114,13 +114,35 @@ end
 local function SkinNoGlowBtn(btn)
 	ApplyButtonSkin(btn, false)
 end
+AS.ApplyAtlasButtonSkin = ApplyButtonSkin  -- exposed for dependent skins (AtlasQuest)
 
 local function SkinTransparentBtn(btn)
 	if not btn then return end
-	ApplyButtonSkin(btn, true)  -- keepIcon: preserve lock/LFG icon region
-	if btn.iborder     then btn.iborder:Hide()   end
-	if btn.oborder     then btn.oborder:Hide()   end
-	if btn.SetBackdrop then btn:SetBackdrop(nil) end
+	-- Kill glow/highlight: SetHighlightTexture('') may not work on XML-defined textures,
+	-- so also hide the texture object directly.
+	if btn.SetHighlightTexture then btn:SetHighlightTexture('') end
+	if btn.SetPushedTexture    then btn:SetPushedTexture('')    end
+	if btn.SetDisabledTexture  then btn:SetDisabledTexture('')  end
+	local ht = btn.GetHighlightTexture and btn:GetHighlightTexture()
+	if ht then ht:SetTexture(nil); ht:Hide() end
+	-- Apply backdrop for border-only hover (no fill, border hidden until hover).
+	if not btn.SetBackdrop and BackdropTemplateMixin then Mixin(btn, BackdropTemplateMixin) end
+	AS.Skins:SetTemplate(btn, nil, false)
+	btn:SetBackdropColor(0, 0, 0, 0)
+	btn:SetBackdropBorderColor(0, 0, 0, 0)
+	if btn.iborder then btn.iborder:Hide() end
+	if btn.oborder then btn.oborder:Hide() end
+	-- Border-only hover (no glow).
+	if not btn._transparentHoverHooked then
+		btn._transparentHoverHooked = true
+		btn._atlasHoverHooked = true
+		btn:HookScript('OnEnter', function(self)
+			self:SetBackdropBorderColor(unpack(AS.Color))
+		end)
+		btn:HookScript('OnLeave', function(self)
+			self:SetBackdropBorderColor(0, 0, 0, 0)
+		end)
+	end
 end
 
 local function LayoutHeader(atlas)
@@ -148,8 +170,12 @@ local function LayoutHeader(atlas)
 	local lockBtn  = _G[pn..'LockButton']
 
 	if optsBtn  then SkinNoGlowBtn(optsBtn);  optsBtn:SetSize(80, 20)  end
-	if closeBtn then closeBtn:SetSize(20, 20) end
-	if lockBtn then lockBtn:SetSize(20, 20); SkinTransparentBtn(lockBtn) end
+	if closeBtn then closeBtn:SetSize(32, 32) end
+	if lockBtn  then lockBtn:SetSize(20, 20);  SkinTransparentBtn(lockBtn)  end
+	local lfgBtn = _G[pn..'LFGButton']
+	if lfgBtn   then lfgBtn:SetSize(20, 20);   SkinTransparentBtn(lfgBtn)   end
+	-- Add proper border-highlight hover to close, lock, lfg.
+
 
 	C_Timer.After(0, function()
 		if not ref then return end
@@ -178,12 +204,12 @@ local function LayoutHeader(atlas)
 		end
 		if closeBtn then
 			closeBtn:ClearAllPoints()
-			closeBtn:SetPoint('RIGHT', atlas, 'RIGHT', -4, 0)
+			closeBtn:SetPoint('RIGHT', atlas, 'RIGHT', 0, 0)
 			closeBtn:SetPoint('TOP',   atlas, 'TOP',    0, TopOffsetHeader(closeBtn))
 		end
 		if lockBtn and closeBtn then
 			lockBtn:ClearAllPoints()
-			lockBtn:SetPoint('RIGHT', closeBtn, 'LEFT', -4, 0)
+			lockBtn:SetPoint('RIGHT', closeBtn, 'LEFT', 4, 0)
 			lockBtn:SetPoint('TOP',   atlas,    'TOP',   0, TopOffsetHeader(lockBtn))
 		end
 		local lfg = _G[pn..'LFGButton']
@@ -262,12 +288,9 @@ local function LayoutHeader(atlas)
 			end)
 		end
 	end
-	-- Initial placement (AQ addon loads after Atlas, so defer slightly).
-	C_Timer.After(1.5, PositionAQButton)
-	-- Reapply on every subsequent Show of AtlasFrame.
-	atlas:HookScript('OnShow', function()
-		C_Timer.After(0.5, PositionAQButton)
-	end)
+	-- AQ loads after Atlas; defer initial placement and reapply on every Show.
+	C_Timer.After(1, PositionAQButton)
+	atlas:HookScript('OnShow', function() C_Timer.After(0, PositionAQButton) end)
 end
 
 -- ----------------------------------------------------------------
@@ -362,14 +385,38 @@ function AS:Atlas(event, addon)
 	do
 		local bi = _G['AtlasFrameBottomInset']
 		if bi then
+			local sbSkinned = false
 			local function FixBotInset()
 				if bi.ScrollBox and bi.ScrollBox.Shadows then
 					bi.ScrollBox.Shadows:Hide()
 				end
 				if bi.backdrop then
+					-- Lighten slightly: ScrollBox content bleeds through at default alpha.
 					local r, g, b, a = bi.backdrop:GetBackdropColor()
 					if r then
 						bi.backdrop:SetBackdropColor(r + 0.06, g + 0.06, b + 0.06, a)
+					end
+				end
+				-- Skin the WowClassicScrollBar and stretch ScrollBox to fill botInset.
+				if not sbSkinned and bi.ScrollBox then
+					local sb
+					for _, child in ipairs({bi:GetChildren()}) do
+						if child.Track and child.GetThumb then
+							sb = child
+							break
+						end
+					end
+					if sb then
+						AS.Skins:HandleTrimScrollBar(sb)
+						-- Stretch both ScrollBox and scrollbar to fill botInset.
+						local sbW = sb:GetWidth()
+						sb:ClearAllPoints()
+						sb:SetPoint('TOPRIGHT',    bi, 'TOPRIGHT',    -2, -5)
+						sb:SetPoint('BOTTOMRIGHT', bi, 'BOTTOMRIGHT', -2,  5)
+						bi.ScrollBox:ClearAllPoints()
+						bi.ScrollBox:SetPoint('TOPLEFT',     bi, 'TOPLEFT',     15,        -5)
+						bi.ScrollBox:SetPoint('BOTTOMRIGHT', bi, 'BOTTOMRIGHT', -(sbW+4),   5)
+						sbSkinned = true
 					end
 				end
 			end
@@ -378,14 +425,8 @@ function AS:Atlas(event, addon)
 		end
 	end
 
-	-- Atlas XML leaves a 6px gap on the right side of TopInset/BottomInset
-	-- (MapFrame 519 + TopInset 496 = 1015 vs AtlasFrame 1023 - 2px left = 1021).
-	-- Stretch them to the frame edge so left and right margins are equal (2px).
-	-- Atlas XML leaves a 6px gap on the right of the right panel (TopInset/
-	-- BottomInset). Fix right edge to match the 2px left margin of MapFrame.
-	-- Atlas XML leaves a 6px gap on the right of the right panel.
-	-- Anchor the right edge of each inset to atlas BOTTOMRIGHT/TOPRIGHT
-	-- so the panel fills to within 2px of the frame edge (matching left margin).
+	-- Atlas XML leaves a 6px gap on the right of TopInset/BottomInset.
+	-- Anchor their right edge to the frame edge to match the 2px left margin.
 	local topInset = _G['AtlasFrameTopInset']
 	local botInset = _G['AtlasFrameBottomInset']
 	local atlMapFrame = _G['AtlasFrameMapFrame']
@@ -404,6 +445,12 @@ function AS:Atlas(event, addon)
 
 	Safe(AS.SkinCloseButton, 'AtlasFrameCloseButton')
 	Safe(AS.SkinCloseButton, 'AtlasFrameSmallCloseButton')
+	do
+		local cb = _G['AtlasFrameCloseButton']
+		if cb then cb:SetSize(32, 32) end
+		local cbs = _G['AtlasFrameSmallCloseButton']
+		if cbs then cbs:SetSize(32, 32) end
+	end
 
 	-- AtlasQuestButtonFrame is a 1x1 mouse-capturing frame anchored TOPRIGHT
 	-- that would intercept clicks in the corner; its child AQ_AtlasToggle is
@@ -456,7 +503,6 @@ function AS:Atlas(event, addon)
 		btn:HookScript('OnLeave', function(self)
 			self._arrow:SetVertexColor(1, 1, 1)
 		end)
-		-- Anchor above AtlasDraw VP (mf+25 > VP mf+20)
 		if mf then
 			btn:ClearAllPoints()
 			btn:SetPoint('BOTTOMRIGHT', mf, 'BOTTOMRIGHT', -6, 6)
