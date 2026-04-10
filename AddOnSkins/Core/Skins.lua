@@ -1675,8 +1675,19 @@ function S:HandleTooltip(tooltip, scale, showHook)
 	S:HandleBlizzardRegions(tooltip)
 	S:SetTemplate(tooltip, nil, nil, nil, nil, nil, nil, nil, true)
 
+	-- HandleBlizzardRegions hides .Center (it's in BlizzardRegions list),
+	-- but SetTemplate needs it as the backdrop fill texture. Re-show it.
+	if tooltip.Center and not tooltip.Center:IsShown() then
+		tooltip.Center:Show()
+	end
+
 	if showHook then
-		tooltip:HookScript('OnShow', function(tt) S:SetTemplate(tt) end)
+		tooltip:HookScript('OnShow', function(tt)
+			S:SetTemplate(tt)
+			if tt.Center and not tt.Center:IsShown() then
+				tt.Center:Show()
+			end
+		end)
 	end
 
 	if scale then
