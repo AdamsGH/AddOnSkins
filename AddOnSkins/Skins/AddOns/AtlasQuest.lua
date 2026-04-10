@@ -86,14 +86,15 @@ local function SkinQuestItemFrames()
 			iconBD:SetPoint('BOTTOMRIGHT', item.icon, 1, -1)
 			AS:SetTemplate(iconBD)
 			iconBD:SetFrameLevel(item:GetFrameLevel() - 1)
+			item._iconBD = iconBD  -- store ref for qualityBorder hook
 		end
 
 		if item.qualityBorder then
 			item.qualityBorder:SetTexture(nil)
 			hooksecurefunc(item.qualityBorder, 'SetVertexColor', function(self, r, g, b)
-				if item.icon and item.icon:GetParent() then
-					-- iconBD uses SetTemplate (inline backdrop), not a child .Backdrop frame
-					item.icon:GetParent():SetBackdropBorderColor(r, g, b)
+				local bd = item._iconBD
+				if bd and bd.SetBackdropBorderColor then
+					bd:SetBackdropBorderColor(r, g, b)
 				end
 			end)
 		end
@@ -121,8 +122,57 @@ function AS:AtlasQuest(event, addon)
 	if not loaded then return end
 
 	Safe(AS.SkinFrame, 'AtlasQuestFrame')
+	local aqFrame = _G['AtlasQuestFrame']
+	local atlasFrame = _G['AtlasFrame']
+	if aqFrame and atlasFrame then
+		local function SyncAQ()
+			local h = atlasFrame:GetHeight()
+			if h and h > 0 then aqFrame:SetHeight(h) end
+			-- Re-anchor to centre of Atlas left/right edge instead of corner
+			local side = _G.AtlasQuest and _G.AtlasQuest.db
+				and _G.AtlasQuest.db.profile.shownSide
+			aqFrame:ClearAllPoints()
+			if side == 'right' then
+				aqFrame:SetPoint('LEFT', atlasFrame, 'RIGHT', -2, 0)
+			else
+				aqFrame:SetPoint('RIGHT', atlasFrame, 'LEFT', 0, 0)
+			end
+		end
+		-- Override AQ's own positioning
+		hooksecurefunc(_G.AtlasQuestFrame, 'SetPoint', function(self)
+			if not self._aqSkinLocked then
+				self._aqSkinLocked = true
+				SyncAQ()
+				self._aqSkinLocked = false
+			end
+		end)
+		atlasFrame:HookScript('OnShow', SyncAQ)
+		atlasFrame:HookScript('OnSizeChanged', SyncAQ)
+		aqFrame:HookScript('OnShow', SyncAQ)
+		C_Timer.After(0.3, SyncAQ)
+	end
 	Safe(AS.SkinCloseButton, 'AQ_SidebarClose')
-	Safe(AS.SkinButton, 'AQ_OptionsButton')
+	local aqOpts = _G['AQ_OptionsButton']
+	if aqOpts and aqFrame and atlasFrame then
+		-- Atlas is a hard dependency of AtlasQuest, so ApplyAtlasButtonSkin is available.
+		if AS.ApplyAtlasButtonSkin then
+			AS.ApplyAtlasButtonSkin(aqOpts, false)
+		end
+		-- Resize to match Entrance button, position centred in bottom strip
+		aqOpts:SetSize(100, 24)
+		local function PlaceAQOpts()
+			-- Use same strip geometry as Entrance: from mapFrame bottom to atlasFrame bottom
+			local mf = _G['AtlasFrameMapFrame']
+			local mfBot = mf and mf:GetBottom()
+			local afBot = atlasFrame:GetBottom()
+			if not mfBot or not afBot then return end
+			local stripH = mfBot - afBot
+			aqOpts:ClearAllPoints()
+			aqOpts:SetPoint('CENTER', aqFrame, 'BOTTOM', 0, stripH / 2)
+		end
+		aqFrame:HookScript('OnShow', PlaceAQOpts)
+		C_Timer.After(0.4, PlaceAQOpts)
+	end
 
 	SkinCheckBox(_G['AQ_AllianceCheck'])
 	SkinCheckBox(_G['AQ_HordeCheck'])
@@ -135,7 +185,8 @@ function AS:AtlasQuest(event, addon)
 
 	Safe(AS.SkinCloseButton, 'AQ_QuestClose')
 	SkinCheckBox(_G['AQ_FinishedQuestCheck'])
-	Safe(AS.SkinButton, 'AQ_AtlasToggle')
+	-- AQ_AtlasToggle is positioned and skinned by the Atlas skin into the header row.
+	-- Skinning it here again would conflict; skip it.
 
 	-- Quest list buttons and item frames are created in OnEnable, defer skinning
 	C_Timer.After(0.1, function()
