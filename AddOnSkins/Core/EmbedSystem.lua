@@ -127,7 +127,9 @@ function ES:Check(Message)
 	if not (AS:CheckOption('EmbedSystem') or AS:CheckOption('EmbedSystemDual')) then return end
 
 	ES:Resize()
-	ES.Main:SetShown(not (AS:CheckOption('EmbedIsHidden') or AS:CheckOption('EmbedOoC')))
+	local shouldShow = not (AS:CheckOption('EmbedIsHidden') or AS:CheckOption('EmbedOoC'))
+	ES.Main:SetShown(shouldShow)
+	ES:ToggleChatFrame(shouldShow)
 
 	for _, Window in next, ES.Windows do
 		Window:SetFrameStrata(strsub(AS:CheckOption('EmbedFrameStrata'), 3))
