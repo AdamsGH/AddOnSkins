@@ -297,6 +297,7 @@ function AS:StartUp(event, ...)
 	end
 
 	ES:Initialize()
+	ES:HookToggleButtonTooltip()
 
 	AS.RunOnce = true
 end

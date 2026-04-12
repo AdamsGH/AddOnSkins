@@ -51,7 +51,6 @@ function ES:Hooks()
 	hooksecurefunc(E:GetModule('Layout'), 'ToggleChatPanels', function() ES:Check() end)
 
 	if RightChatToggleButton then
-		RightChatToggleButton:RegisterForClicks('AnyDown')
 		RightChatToggleButton:SetScript('OnClick', function(s, btn)
 			if btn == 'RightButton' then
 				if ES.Main:IsShown() then
@@ -77,26 +76,35 @@ function ES:Hooks()
 				end
 			end
 		end)
-
-		RightChatToggleButton:SetScript('OnEnter', function(s)
-			if E.db[s.parent:GetName()..'Faded'] then
-				s.parent:Show()
-				UIFrameFadeIn(s.parent, 0.2, s.parent:GetAlpha(), 1)
-				UIFrameFadeIn(s, 0.2, s:GetAlpha(), 1)
-				if not AS:CheckOption('EmbedIsHidden') then
-					ES.Main:Show()
-				end
-			end
-
-			if not s.parent.editboxforced then
-				_G.GameTooltip:SetOwner(s, 'ANCHOR_TOPLEFT', 0, 4)
-				_G.GameTooltip:ClearLines()
-				_G.GameTooltip:AddDoubleLine(L["Left Click:"], L["Toggle Chat Frame"], 1, 1, 1)
-				_G.GameTooltip:AddDoubleLine(L["Right Click:"], L["Toggle Embedded Addon"], 1, 1, 1)
-				_G.GameTooltip:Show()
-			end
-		end)
 	end
+end
+
+-- Hook RightChatToggleButton tooltip unconditionally so the Right Click
+-- line appears even when the embed system is disabled.
+function ES:HookToggleButtonTooltip()
+	if not (E and RightChatToggleButton) then return end
+	if RightChatToggleButton._asTipHooked then return end
+	RightChatToggleButton._asTipHooked = true
+
+	RightChatToggleButton:RegisterForClicks('AnyDown')
+	RightChatToggleButton:HookScript('OnEnter', function(s)
+		if E.db[s.parent:GetName()..'Faded'] then
+			s.parent:Show()
+			UIFrameFadeIn(s.parent, 0.2, s.parent:GetAlpha(), 1)
+			UIFrameFadeIn(s, 0.2, s:GetAlpha(), 1)
+			if not AS:CheckOption('EmbedIsHidden') then
+				ES.Main:Show()
+			end
+		end
+
+		if not s.parent.editboxforced then
+			_G.GameTooltip:SetOwner(s, 'ANCHOR_TOPLEFT', 0, 4)
+			_G.GameTooltip:ClearLines()
+			_G.GameTooltip:AddDoubleLine(L["Left Click:"], L["Toggle Chat Frame"], 1, 1, 1)
+			_G.GameTooltip:AddDoubleLine(L["Right Click:"], L["Toggle Embedded Addon"], 1, 1, 1)
+			_G.GameTooltip:Show()
+		end
+	end)
 end
 
 function ES:Resize()
